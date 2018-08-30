@@ -1,0 +1,84 @@
+* {
+  /*background: rgb(41, 41, 43);*/
+  font-family: monospace, "Courier New", Courier;
+}
+
+body {
+  margin-top: 50px;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-image: url(https://hdwallsource.com/img/2014/7/dark-7279-7559-hd-wallpapers.jpg);
+}
+
+.rhino_logo {
+  display: block;
+  margin: auto;
+  margin-bottom: 10px;
+}
+
+header {
+  height: 60px;
+  width: 530px;
+  background-color: rgba(45, 48, 58, 0.774);
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+header nav ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  align-content: space-around;
+}
+header nav ul li {
+  font-size: 20;
+  font-weight: 650;
+  height: 60px;
+  display: flex;
+  align-items: center;
+}
+header nav ul li a {
+  color: white;
+  padding: 18px 16px 18px;
+  text-decoration: none;
+}
+header nav ul li:hover {
+  background-color: #4c7d99;
+  transition: 0.25s background-color;
+  /*border-bottom: 3px solid #cf5829;*/
+}
+header nav ul li:nth-child(1) {
+  background-color: rgba(75, 207, 196, 0.6);
+}
+
+#wrapper {
+  min-height: 100%;
+  margin-bottom: -50px;
+}
+
+#id {
+  padding-bottom: 100px;
+}
+
+#main {
+  display: block;
+  margin: auto;
+  margin-top: 40px;
+  margin-bottom: 40px;
+  width: 60%;
+  background-color: white;
+  padding-top: 40px;
+  padding-bottom: 40px;
+}
+
+footer {
+  height: 50px;
+  width: 100%;
+}
+
+/*# sourceMappingURL=styles.css.map */
