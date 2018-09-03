@@ -4,7 +4,6 @@
 
 body {
   margin: 0;
-  margin-top: 30px;
   background: white;
   /*
   background-position:center;
@@ -42,19 +41,16 @@ header nav ul li {
   height: 60px;
   display: flex;
   align-items: center;
+  /*
+      &:hover{
+          background-color: rgba(37, 152, 206, 0.74);
+          transition: .25s background-color;
+  */
 }
 header nav ul li a {
   color: rgba(28, 29, 29, 0.582);
   padding: 18px 16px 18px;
   text-decoration: none;
-}
-header nav ul li:hover {
-  background-color: #4c7d99;
-  transition: 0.25s background-color;
-  /*border-bottom: 3px solid #cf5829;*/
-}
-header nav ul li:nth-child(1) {
-  background-color: rgba(75, 207, 196, 0.6);
 }
 
 #wrapper {

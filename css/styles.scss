@@ -7,7 +7,6 @@ $FONT_SIZE: 20;
 
 body {
     margin: 0;
-    margin-top: 30px;
     background: white;
     /*
     background-position:center;
@@ -51,16 +50,13 @@ header {
                     padding: 18px 16px 18px;
                     text-decoration: none;
                 }
-
+            /*
                 &:hover{
-                    background-color: rgb(76, 125, 153);
+                    background-color: rgba(37, 152, 206, 0.74);
                     transition: .25s background-color;
-                    /*border-bottom: 3px solid #cf5829;*/
-                }
-            }
-
-            li:nth-child(1) {
-                background-color: rgba(75, 207, 196, 0.6);
+            */
+                
+                
             }
         }
     }
