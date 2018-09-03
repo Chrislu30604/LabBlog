@@ -1,0 +1,1263 @@
+<div id="doc" class="markdown-body container-fluid"><h1 id="Linux-Device-Driver-3e-part-1">Linux Device Driver 3.e (part 1)</h1><h2 id="chapter-1-An-Introduction-to-Device-Driver">chapter 1. An Introduction to Device Driver</h2><h3 id="10-Where-is-the-device-in-unixlinux-">1.0 Where is the device in unix/linux ?</h3><ul>
+<li>Almost everything(also include device) can be treated as a file, so devices are in <strong>/dev</strong> directory</li>
+</ul><h3 id="11-What-is-the-device-Driver-">1.1 What is the device Driver ?</h3><ul>
+<li>device driver : device control operations are performed by code that is specific to the device being addressed</li>
+</ul><h3 id="12-What-is-the-kernel-module-">1.2 What is the kernel module ?</h3><ul>
+<li>code that can be loaded and unloaded into the kernel at runtime</li>
+<li>extend the functionality of the kernel <strong>without reboot</strong></li>
+</ul><h3 id="13-How-to-load-and-unload-modules-into-the-kernel-">1.3 How to load and unload modules into the kernel ?</h3><ul>
+<li>flow<br>
+<img src="https://i.imgur.com/XS1oFFP.png" alt=""></li>
+</ul><ul>
+<li>load  modules
+<ol>
+<li>User.c generate User.ko by <strong>Makefile</strong>
+<ul>
+<li>details about  <a href="https://hackmd.io/s/SySTMXPvl" target="_blank">Makefile</a></li>
+</ul>
+</li>
+<li>By command<br>
+<strong>root# insmod /…/user.ko</strong><br>
+or<br>
+<strong>root# modprobe user.ko</strong><br>
+(difference between insmod or modprobe? explain in chapter 2)</li>
+</ol>
+<blockquote>
+<p>Makefile prototype</p>
+</blockquote>
+</li>
+</ul><pre><code class="makefile hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span></div><div class="code">obj-m     := user.o
+KERN_SRC  := /libs/modules/<span class="hljs-variable">$(<span class="hljs-built_in">shell</span> uname -r)</span>/build/
+PWD       := <span class="hljs-variable">$(<span class="hljs-built_in">shell</span> pwd)</span>
+<span class="hljs-section">modules:</span>
+    make -C <span class="hljs-variable">$(KERN_SRC)</span> M=<span class="hljs-variable">$(PWD)</span> modules
+    
+<span class="hljs-section">install:</span>
+    make -C <span class="hljs-variable">$(KERN_SRC)</span> M=<span class="hljs-variable">$(PWD)</span> modules_install
+    depmod -a
+<span class="hljs-section">clean:</span>
+    make -C <span class="hljs-variable">$(KERN_SRC)</span> M=<span class="hljs-variable">$(PWD)</span> clean
+</div></div></code></pre><ul>
+<li>unload modules
+<ul>
+<li>use <strong>root# rmmod user.ko</strong></li>
+</ul>
+</li>
+</ul><div class="alert alert-warning">
+<p>user.c file exists, so we <s>can use standard C libaray , GNU C</s></p>
+</div><h3 id="14-Why-can’t-we-use-standard-C-library-">1.4 Why can’t we use standard C library ?</h3><p><img src="https://qph.ec.quoracdn.net/main-qimg-02faff67780f2539c0337c15bd6d2672.webp" alt=""></p><ul>
+<li>what glibc does?
+<ul>
+<li>Library functions an Operating System exposes for the users to develop their applications.</li>
+<li>they exploit the system calls to interact with the device drivers to perform a specific task of function call</li>
+<li>user space library</li>
+<li>example : printf text on your console<br>
+<img src="https://i.imgur.com/pK1iJaE.png" alt=""></li>
+</ul>
+</li>
+<li>So, writing the device driver, we only can use <strong>the driver function write in the kernel</strong></li>
+</ul><h3 id="15-Classification-of-Modules-and-Devices">1.5 Classification of Modules and Devices</h3><ul>
+<li>char module       -&gt; char device<br>
+block module      -&gt; block device<br>
+network Interface -&gt; network device<br>
+others…</li>
+<li>Access device by <strong>filesystem node</strong> -&gt;<strong>inode</strong>(index node)<br>
+(details about <a href="https://unix.stackexchange.com/questions/4402/what-is-a-superblock-inode-dentry-and-a-file" target="_blank">inode、block、supernode</a>)</li>
+<li>Most devices in the world are <strong>character device</strong></li>
+<li>How can we tell the device ? by <strong>ls -l /dev</strong> by first character<br>
+<img src="https://i.imgur.com/eZX1Qbv.png" alt=""><br>
+’c’ is character divce, ‘b’ is block device</li>
+</ul><h4 id="Character-Device">Character Device</h4><ul>
+<li>a stream of bytes(like a file) access</li>
+<li>a char driver in charge of access character device like access file</li>
+<li>we need implement <strong>open()、close()、read()、close()</strong> functions at least</li>
+<li>example : /dev/tty1、/dev/lp0</li>
+</ul><h4 id="Block-Device">Block Device</h4><ul>
+<li>usually 512 bytes (or a larger power of two)<br>
+(in ext2 , block can be 1K、2K、4K )</li>
+<li>can only accept input and return output in blocks</li>
+<li>example : diskIO</li>
+</ul><h4 id="Network-Interface">Network Interface</h4><ul>
+<li>exchange data with other hosts</li>
+<li>a network interface isn’t easily mapped to a node in the filesystem, as /dev/tty1</li>
+</ul><h2 id="chapter-2-Modules">chapter 2. Modules</h2><h3 id="20-Modules-vs-Applications">2.0 Modules vs. Applications</h3><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Entry</th>
+<th>end  with</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>programs</td>
+<td>int main()</td>
+<td>the end of int main()</td>
+</tr>
+<tr>
+<td>modules</td>
+<td>module_init(your function)</td>
+<td>module_exit(your function)</td>
+</tr>
+</tbody>
+</table><ul>
+<li>Apps
+<ul>
+<li>begin and end with main function</li>
+<li>perform a single task from beginning to end</li>
+</ul>
+</li>
+<li>Kernel Modules
+<ul>
+<li><strong>module_init(~)</strong> :
+<ul>
+<li>get invoked right after the module is loaded(insmod)</li>
+<li>to prepare for later triggering of module’s functions</li>
+</ul>
+</li>
+<li><strong>module_exit(~)</strong> :
+<ul>
+<li>get invoked just before the module is unload(rmmod)</li>
+<li>undoes whatever entry function did and unregisters the functionality that the entry function registered</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul><h3 id="21-Kernel-Space-vs-User-space">2.1 Kernel Space vs. User space</h3><ul>
+<li>A module runs in <strong>kernel space</strong>, whereas applications run in <strong>user space</strong></li>
+<li>different operating modalities(or level) in the CPU itself</li>
+<li>memory mapping
+<ul>
+<li><strong>virtual memory</strong> for user space</li>
+<li><strong>physical memory</strong> for kernel space</li>
+<li>context switch(but ISR can’t access current proccess context)</li>
+</ul>
+</li>
+</ul><h3 id="22-The-Structure-of-Modules">2.2 The Structure of Modules</h3><ul>
+<li>hello_world.c modules</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span>
+<span data-linenumber="12"></span>
+<span data-linenumber="13"></span>
+<span data-linenumber="14"></span>
+<span data-linenumber="15"></span>
+<span data-linenumber="16"></span></div><div class="code">    <span class="hljs-meta">#<span class="hljs-meta-keyword">include</span> <span class="hljs-meta-string">&lt;linux/init.h&gt;</span></span>
+    <span class="hljs-meta">#<span class="hljs-meta-keyword">include</span> <span class="hljs-meta-string">&lt;linux/module.h&gt;</span></span>
+    MODULE_LICENSE(<span class="hljs-string">"Dual BSD/GPL"</span>);
+    
+    <span class="hljs-function"><span class="hljs-keyword">static</span> <span class="hljs-title">int_hello_init</span><span class="hljs-params">(<span class="hljs-keyword">void</span>)</span>
+    </span>{
+        printk(KERN_ALERT <span class="hljs-string">"hello, world\n"</span>);
+    }
+    
+    <span class="hljs-function"><span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title">hello_exit</span><span class="hljs-params">(<span class="hljs-keyword">void</span>)</span>
+    </span>{
+        printk(KERN_ALERT <span class="hljs-string">"Goodbye, cruel world\n"</span>);
+    }
+    
+    module_init(hello_init);
+    module_exit(hello_exit);
+</div></div></code></pre><ul>
+<li>explanation of module
+<ul>
+<li>#include&lt;header&gt; : header of kernel source in /usr/src/linux/…</li>
+<li>hello_init : get invoked right after the module is loaded</li>
+<li>hello_exit : get invoked just before the module is unload</li>
+<li>MODULES_LICENSE : macro that define this module bears a free license</li>
+<li>printk : the kernel printing function</li>
+<li>KERN_ALTER : is the priority of the message.</li>
+<li>static : the function or variables only belongs to this module</li>
+<li>module_init and module_exit : macro that indicate the role of these two functions</li>
+</ul>
+</li>
+<li>insert modules(review)<br>
+-&gt; insmod   /…/hello_world.ko<br>
+-&gt; modprobe hello_world.ko<br>
+(if hello_world.ko is already in /lib/modules/kernel/…)</li>
+</ul><div class="alert alert-warning">
+<p>But with printk function, how to check the messages? -&gt;  <strong>root# cat /var/log/messages</strong></p>
+</div><h3 id="23-Differences-between-insmod-and-modprobe">2.3 Differences between insmod and modprobe</h3><ul>
+<li>if we have two modules, cat.ko、dog.ko. And cat.ko need to be loaded first (because dog.ko use the symbol in cat.ko) if we only want dog.ko be loaded</li>
+<li><strong>insmod</strong> requires you to pass it the full pathname and to insert the modules in the right order</li>
+</ul><blockquote>
+<p><em>root#</em> insmod /lib/modules/…/cat.ko<br>
+<em>root#</em> insmod /lib/modules/…/dog.ko</p>
+</blockquote><ul>
+<li><strong>modprobe</strong> just takes the name, without any extension, and figures out all it needs to know by parsing /lib/modules/…/modules.dep
+<ul>
+<li>it also loads any other modules that are required by the module you want it to be loaded</li>
+<li>only search the standard installed module directorie(/lib/modules/…)</li>
+<li>search the unresolved symbols in the current directory and find relevant symbol of other modules(see <a href="https://www.tutorialspoint.com/compiler_design/compiler_design_symbol_table.htm" target="_blank">symbol table</a>)</li>
+</ul>
+</li>
+</ul><blockquote>
+<p><em>root#</em> modprobe dog.ko</p>
+</blockquote><p><img src="https://i.imgur.com/UilSwns.png" alt="" width="350" height="120"></p><h3 id="24-Namespace-Pollution">2.4 Namespace Pollution</h3><h4 id="How-did-this-happen-">How did this happen ?</h4><ul>
+<li>the same symbol occurs in the symbol table</li>
+</ul><h4 id="How-to-avoid-">How to avoid ?</h4><ul>
+<li>declare everything as <strong>static</strong> (static function and variables  only belong to current modules! )</li>
+</ul><h4 id="But-how-to-export-symbol-to-other-modules-">But how to export symbol to other modules ?</h4><ul>
+<li>by macros EXPORT_SYMBOL in &lt;linux/export.h&gt;</li>
+</ul><pre><code class="txt hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span></div><div class="code">EXPORT_SYMBOL(name)       <span class="hljs-regexp">//</span><span class="hljs-keyword">export</span> symbol <span class="hljs-keyword">for</span> all <span class="hljs-built_in">module</span> 
+EXPORT_SYMBOL_GPL(name)   <span class="hljs-regexp">//</span><span class="hljs-keyword">export</span> symbol <span class="hljs-keyword">for</span> GPL-licensed <span class="hljs-built_in">module</span> 
+</div></div></code></pre><ul>
+<li>the symbol export by EXPORT_SYMBOL will put into a section that if the loaded module find unresolved symbol, it will search this section.<br>
+(details about <a href="http://blog.listnukira.com/Linux-Kernel-EXPORT-SYMBOL-macro/" target="_blank">EXPORT_SYMBOL</a>)</li>
+</ul><h3 id="25-Preliminaries">2.5 Preliminaries</h3><h4 id="header">header</h4><ul>
+<li>‘many’ headers should be included to modules!! two of them are necessary!
+<ul>
+<li><em>#include &lt;linux/module.h&gt;</em>
+<ul>
+<li>contains a great many definitions of symbols and functions needed by loadable modules</li>
+</ul>
+</li>
+<li><em>#include &lt;liunx/init.h&gt;</em>
+<ul>
+<li>specify your initialization and cleanup functions</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul><h4 id="license">license</h4><ul>
+<li><em>MODULE_LICENSE(type)</em>  macro defined in linux/module.h</li>
+<li>license type</li>
+</ul><pre><code>"GPL"		             [GNU Public License v2 or later]
+"GPL v2"	             [GNU Public License v2]
+"GPL and additional rights" [GNU Public License v2 rights and more]
+"Dual BSD/GPL"		     [GNU Public License v2 or BSD license choice]
+"Dual MIT/GPL"		     [GNU Public License v2	or MIT license choice]
+"Dual MPL/GPL"		     [GNU Public License v2 or Mozilla license choice]
+"Proprietary"		     [Non free products]
+
+</code></pre><h4 id="Other-information">Other information</h4><ul>
+<li><em>MODULE_AUTHOR(module_author)</em></li>
+<li><em>MODULE_DESCRIPTION(the purpose of this MODULE)</em></li>
+<li><em>MODULE_VERSION(version)</em></li>
+<li><em>MOUDLE_ALIAS()</em> (linux/modules.h has the convention)</li>
+<li><em>MODULE_DEVICE_TALBE()</em></li>
+</ul><h4 id="How-to-get-the-information">How to get the information?</h4><ul>
+<li><em>#modinfo module.ko</em><br>
+<img src="https://i.imgur.com/lBxE94B.png" alt=""></li>
+</ul><h3 id="26-Initialization-and-Shutdown-for-Modules">2.6 Initialization and Shutdown for Modules</h3><h4 id="The-Initial-function">The Initial function</h4><ul>
+<li>When it is invoked ?<br>
+get invoked right after the module is loaded</li>
+<li>What it does ?<br>
+register ‘facility’(new function) to kernel module (including different kinds of devices, filesystems, cryptographic transforms,serial ports, miscellaneous devices, sysfs entries, /proc files, executable domains, and line disciplines<br>
+)</li>
+<li>Initial function structure</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span></div><div class="code"><span class="hljs-keyword">static</span> <span class="hljs-keyword">int</span> __<span class="hljs-function">init <span class="hljs-title">initialization_function</span><span class="hljs-params">(<span class="hljs-keyword">void</span>)</span>
+</span>{
+    <span class="hljs-comment">/* initialize code */</span>
+}
+
+module_init(initialization_function);
+</div></div></code></pre><ul>
+<li>
+<p>label</p>
+<ul>
+<li>__init : Once the module is successfully loaded into kernel, the module loader drops the initialization function, making its <strong>memory available for other uses</strong></li>
+<li>__initdata : is similar to __init for data used only during initialization</li>
+<li>__devinit : ?</li>
+<li>__devinitdata : ?</li>
+</ul>
+</li>
+<li>
+<p>Error Handling During Initialization</p>
+<ul>
+<li>why ?<br>
+If it turns out that your module simply cannot load after a particular type of failure, you must undo any registration activities performed before the failure</li>
+<li>use <em>goto</em> -&gt; because of the minimum program code and time cost</li>
+<li>err : error code<br>
+-&gt; must be negative<br>
+-&gt; defined in &lt;linux/errno.h&gt;<br>
+-&gt; like -ENODEV、-ENOMEM</li>
+</ul>
+</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span>
+<span data-linenumber="12"></span>
+<span data-linenumber="13"></span>
+<span data-linenumber="14"></span>
+<span data-linenumber="15"></span>
+<span data-linenumber="16"></span>
+<span data-linenumber="17"></span>
+<span data-linenumber="18"></span>
+<span data-linenumber="19"></span></div><div class="code"><span class="hljs-keyword">int</span> __<span class="hljs-function">init <span class="hljs-title">my_init_function</span><span class="hljs-params">(<span class="hljs-keyword">void</span>)</span>
+</span>{
+    <span class="hljs-keyword">int</span> err;
+    
+    err = register_this(ptr1, <span class="hljs-string">"skull"</span>);
+        <span class="hljs-keyword">if</span>(err) <span class="hljs-keyword">goto</span> fail_this;
+    err = register_that(ptr2, <span class="hljs-string">"skull"</span>);
+        <span class="hljs-keyword">if</span>(err) <span class="hljs-keyword">goto</span> fail_that;
+    err = register_those(ptr3, <span class="hljs-string">"skull"</span>);
+        <span class="hljs-keyword">if</span>(err) <span class="hljs-keyword">goto</span> fail_those;
+    
+    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>; <span class="hljs-comment">//success</span>
+    
+    <span class="hljs-comment">/* if failed*/</span>
+    fail_those: unregister_that(ptr2, <span class="hljs-string">"skull"</span>);
+    fail_that: unregister_this(ptr1, <span class="hljs-string">"skull"</span>);
+    fail_this: <span class="hljs-keyword">return</span> err;
+}
+
+</div></div></code></pre><h4 id="The-Cleanup-Function">The Cleanup Function</h4><ul>
+<li>When it is invoked ?<br>
+get invoked just before the module is unload</li>
+<li>What it does ?<br>
+unregisters interfaces and returns all resources to the system before the module is removed</li>
+<li>cleanup function structure</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span></div><div class="code"><span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> __<span class="hljs-function"><span class="hljs-built_in">exit</span> <span class="hljs-title">cleanup_function</span><span class="hljs-params">(<span class="hljs-keyword">void</span>)</span> 
+</span>{    
+    <span class="hljs-comment">/* Cleanup code here */</span> 
+} 
+
+module_exit(cleanup_function);
+</div></div></code></pre><ul>
+<li>label
+<ul>
+<li>__exit :　marks the code as being for module unload only(put in ELF section)</li>
+</ul>
+</li>
+</ul><div class="alert alert-warning">
+<ul>
+<li>if we want cleanup function to unroll the successfully registered facilities when it gets some error in initial function, do not use label __exit.</li>
+<li>But we prefer use <em>goto</em> instead of calling cleanup function when errors happened</li>
+</ul>
+</div><ul>
+<li>cleanup_function
+<ul>
+<li>must in <strong>inverse register order</strong></li>
+</ul>
+</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span></div><div class="code"><span class="hljs-keyword">void</span> __<span class="hljs-function"><span class="hljs-built_in">exit</span> <span class="hljs-title">my_cleanup_function</span><span class="hljs-params">(<span class="hljs-keyword">void</span>)</span>
+</span>{
+    unregister_those(ptr3, <span class="hljs-string">"skull"</span>);
+    unregister_that(ptr2, <span class="hljs-string">"skull"</span>);
+    unregister_this(ptr1, <span class="hljs-string">"skull"</span>);
+    <span class="hljs-keyword">return</span>;
+}
+</div></div></code></pre><h4 id="Example">Example</h4><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span>
+<span data-linenumber="12"></span>
+<span data-linenumber="13"></span>
+<span data-linenumber="14"></span>
+<span data-linenumber="15"></span>
+<span data-linenumber="16"></span>
+<span data-linenumber="17"></span>
+<span data-linenumber="18"></span>
+<span data-linenumber="19"></span>
+<span data-linenumber="20"></span>
+<span data-linenumber="21"></span>
+<span data-linenumber="22"></span>
+<span data-linenumber="23"></span>
+<span data-linenumber="24"></span>
+<span data-linenumber="25"></span>
+<span data-linenumber="26"></span>
+<span data-linenumber="27"></span>
+<span data-linenumber="28"></span>
+<span data-linenumber="29"></span>
+<span data-linenumber="30"></span>
+<span data-linenumber="31"></span>
+<span data-linenumber="32"></span>
+<span data-linenumber="33"></span></div><div class="code"><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">something</span> *<span class="hljs-title">item1</span>;</span>
+<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">somethingelse</span> *<span class="hljs-title">item2</span>;</span>
+<span class="hljs-function"><span class="hljs-keyword">int</span> stuff_ok
+
+<span class="hljs-keyword">void</span> <span class="hljs-title">my_cleanup</span><span class="hljs-params">(<span class="hljs-keyword">void</span>)</span>
+</span>{
+    <span class="hljs-keyword">if</span>(item1)
+        release_thing(item1);
+    <span class="hljs-keyword">if</span>(item2)
+        release_thing2(item2);
+    <span class="hljs-keyword">if</span>(stuff_ok)
+        unregister_stuff();
+    <span class="hljs-keyword">return</span>;
+}
+
+<span class="hljs-keyword">int</span> __<span class="hljs-function">init <span class="hljs-title">my_init</span><span class="hljs-params">(<span class="hljs-keyword">void</span>)</span>
+</span>{
+    <span class="hljs-keyword">int</span> err = -ENOMEM;
+    item1 = allocate_thing(arguments);
+    item2 = allocate_thing2(arguments);
+    <span class="hljs-keyword">if</span>(!item1 || !item2)
+        <span class="hljs-keyword">goto</span> fail;
+    err = register_stuff(item1, item2);
+    <span class="hljs-keyword">if</span>(!err)
+        stuff_ok = <span class="hljs-number">1</span>;
+    <span class="hljs-keyword">else</span>
+        <span class="hljs-keyword">goto</span> fail;
+    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;  /success
+    
+fail:
+    my_cleanup();
+    <span class="hljs-keyword">return</span> err;
+}
+</div></div></code></pre><h3 id="27-Passing-Command-Line-Arguments-to-a-Module">2.7 Passing Command Line Arguments to a Module</h3><ul>
+<li>Numerous types are supported for module parameters</li>
+</ul><pre><code>bool 
+invbool 
+charp : A char pointer value 
+int 
+long 
+short 
+uint 
+ulong 
+ushort
+</code></pre><ul>
+<li>How to let <strong>insmod or modprobe</strong> to pass arguements to module?
+<ul>
+<li><em>#include&lt;linux/moduleparam.h&gt;</em></li>
+<li><em>module_param(var, type, perm);</em></li>
+<li><em>module_param_array(var, type, num, perm);</em>
+<ul>
+<li>perm  (permission)<br>
+S_IRUGO : can be read by the world but cannot be changed<br>
+S_IRUGO|S_IWUSR :　allows root to change the parameter<br>
+S_IRUSR : user<br>
+S_IRGRP : group<br>
+S_IROTH : other<br>
+(S_IRUGO = S_SIRUSR | S_IRGRP | S_IROTH)</li>
+</ul>
+</li>
+<li>demonstration test_parm.c</li>
+</ul>
+</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span>
+<span data-linenumber="12"></span>
+<span data-linenumber="13"></span>
+<span data-linenumber="14"></span>
+<span data-linenumber="15"></span>
+<span data-linenumber="16"></span>
+<span data-linenumber="17"></span>
+<span data-linenumber="18"></span>
+<span data-linenumber="19"></span>
+<span data-linenumber="20"></span>
+<span data-linenumber="21"></span>
+<span data-linenumber="22"></span>
+<span data-linenumber="23"></span>
+<span data-linenumber="24"></span>
+<span data-linenumber="25"></span>
+<span data-linenumber="26"></span>
+<span data-linenumber="27"></span></div><div class="code"><span class="hljs-meta">#<span class="hljs-meta-keyword">include</span><span class="hljs-meta-string">"test_parm.h"</span> </span>
+<span class="hljs-meta">#<span class="hljs-meta-keyword">include</span><span class="hljs-meta-string">&lt;linux/moduleparam.h&gt;</span></span>
+<span class="hljs-meta">#<span class="hljs-meta-keyword">define</span> TEST_PARM_PLATFORM_NAME DRIVER_NAME </span>
+
+MODULE_LICENSE(<span class="hljs-string">"GPL"</span>); 
+MODULE_AUTHOR(<span class="hljs-string">"CHRISLU"</span>); 
+
+<span class="hljs-keyword">static</span> <span class="hljs-keyword">short</span> <span class="hljs-keyword">int</span> myshort = <span class="hljs-number">1</span>; 
+<span class="hljs-keyword">static</span> <span class="hljs-keyword">int</span> myint = <span class="hljs-number">420</span>;. 
+<span class="hljs-keyword">static</span> <span class="hljs-keyword">long</span> <span class="hljs-keyword">int</span> mylong = <span class="hljs-number">9999</span>; 
+<span class="hljs-keyword">static</span> <span class="hljs-keyword">char</span> *mystring = <span class="hljs-string">"bash"</span>; 
+<span class="hljs-keyword">static</span> <span class="hljs-keyword">int</span> myintArray[<span class="hljs-number">2</span>] = {<span class="hljs-number">-1</span>, <span class="hljs-number">-1</span>}; 
+<span class="hljs-keyword">static</span> <span class="hljs-keyword">int</span> arr_argc = <span class="hljs-number">0</span>; 
+
+
+<span class="hljs-comment">//MODULE_PARM_DESC : is used to document arguments that the module can take.</span>
+
+module_param(myshort, <span class="hljs-keyword">short</span>, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP); 
+MODULE_PARM_DESC(myshort, <span class="hljs-string">"A short integer"</span>); 
+module_param(myint, <span class="hljs-keyword">int</span>, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH); 
+MODULE_PARM_DESC(myint, <span class="hljs-string">"An integer"</span>); 
+module_param(mylong, <span class="hljs-keyword">long</span>, S_IRUSR); 
+MODULE_PARM_DESC(mylong, <span class="hljs-string">"A long integer"</span>); 
+module_param(mystring, charp, <span class="hljs-number">0000</span>); 
+MODULE_PARM_DESC(mystring, <span class="hljs-string">"A character string"</span>); 
+module_param_array(myintArray, <span class="hljs-keyword">int</span>, &amp;arr_argc, <span class="hljs-number">0000</span>); 
+MODULE_PARM_DESC(myintArray, <span class="hljs-string">"An array of intergers"</span>); 
+</div></div></code></pre><p><img src="https://i.imgur.com/o8V1mMU.png" alt=""></p><p><img src="https://i.imgur.com/l3AGn1B.png" alt=""></p><h3 id="28-Why-not-just-write-the-app-in-user-space-">2.8 Why not just write the app in user space ?</h3><ol>
+<li><strong>context switch</strong> : it mays take more time to transfer data between applications and device<br>
+(user space -&gt; kernel space switch)</li>
+<li><strong>I/O memory</strong> can’t access directly</li>
+<li><strong>ISR</strong> can’t be used</li>
+<li>swap time</li>
+</ol><h4 id="advantages">advantages</h4><ol>
+<li>C library</li>
+<li>debugger IDE(kernel modules can’t debug with regular ways)</li>
+<li>kill proccess if user-space driver break down(kernel space driver break down may cause big problem!)</li>
+<li>multiproccess access if design properly</li>
+</ol><h2 id="chapter-3-Char-Drivers">chapter 3. Char Drivers</h2><h3 id="30-Special-labels---Major-and-Minor-Numbers">3.0 Special labels - Major and Minor Numbers</h3><h4 id="Major-number">Major number</h4><ul>
+<li>number tells you where driver is used to access the hardware</li>
+<li>all device has the same major number (one driver can control two or more devices)</li>
+<li>when registering, major number is more important than minor.</li>
+</ul><h4 id="minor-number">minor number</h4><ul>
+<li>driver to distinguish between the various hardware it controls</li>
+</ul><h4 id="How-to-get-numbers-">How to get numbers ?</h4><ul>
+<li>by <em>#ls -l /dev</em><br>
+<img src="https://i.imgur.com/0wGxcx3.png" alt=""></li>
+</ul><h4 id="Representation-of-Device-Number">Representation of Device Number</h4><ul>
+<li>type : <em>dev_t</em>
+<ul>
+<li>defined in &lt;liunx/types.h&gt;</li>
+<li>32 bits (12 major + 20 minor)</li>
+</ul>
+</li>
+<li>to obtain the major or minor parts of dev, use macro defined in &lt;linux/kdev_t.h&gt;
+<ul>
+<li><em>MAJOR(dev_t dev);</em><br>
+<em>MINOR(dev_t dev);</em></li>
+</ul>
+</li>
+<li>to combine two numbers into a dev_t, use
+<ul>
+<li><em>MKDEV(int major, int minor);</em></li>
+</ul>
+</li>
+</ul><h3 id="31-Allocating-and-Freeing-Device-Numbers">3.1 Allocating and Freeing Device Numbers</h3><ul>
+<li>function defined in <em>&lt;linux/fs.h&gt;</em></li>
+</ul><h4 id="Allocation-of-device-numbers">Allocation of device numbers</h4><ul>
+<li><em>int register_chrdev_region(dev_t first, unsigned int count, char *name);</em>
+<ul>
+<li>
+<p><em>first</em> : the beginning device number of the range you would like to allocate.</p>
+</li>
+<li>
+<p><em>count</em> : is the total number of contiguous device numbers you are requesting</p>
+</li>
+<li>
+<p><em>*name</em> : the name of device, it will apears in <em>proc/devices</em> and <em>sysfs</em></p>
+</li>
+<li>
+<p>return 0 : success<br>
+return -XXXX : failed<br>
+<img src="https://i.imgur.com/BkZiHRi.png" alt=""><br>
+(major number)</p>
+<p><img src="https://i.imgur.com/xJIyFiv.png" alt=""></p>
+</li>
+</ul>
+</li>
+</ul><h4 id="Dynamic-allocation-of-device-numbers">Dynamic allocation of device numbers</h4><ul>
+<li>int alloc_chardev_region(dev_t <em>dev, unsigned int firstminor, unsigned int count, char *name)</em>
+<ul>
+<li>dev : is an output-only parameter, once successfully allocating, dev is the first number in your allocated range</li>
+<li>firstminor : should be the request first minor number to use</li>
+</ul>
+</li>
+<li>When to use dynamic allocation ?
+<ul>
+<li>for new driver(old driver in /Documentation/devices.txt had been allocated)</li>
+<li>we don’t know the precise range of device number</li>
+</ul>
+</li>
+</ul><div class="alert alert-warning">
+<p>if allocating device numbers by dynamic allocation, you shouldn’t <strong>mknod</strong> in your /dev <strong>“in advance!!!”</strong>.(before insmod module).<br>
+You should check var/log/messages of what major number you register!<br>
+<em><strong>#mknod /dev/test_parm c 12 2</strong></em></p>
+</div><h4 id="work-along-both-lines">work along both lines!</h4><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span></div><div class="code"><span class="hljs-keyword">if</span>(bzip_major){
+    dev = <span class="hljs-built_in">MKDEV</span>(bzip_major, bzip_minor);
+    result = register_chr_dev_region(dev, bzip_count, <span class="hljs-string">"bzip"</span>);
+}
+<span class="hljs-keyword">else</span>{
+    result = alloc_chrdev_region(&amp;dev, bzip_minor, bzip_count, <span class="hljs-string">"bzip"</span>);
+}
+<span class="hljs-keyword">if</span> (result &lt; <span class="hljs-number">0</span>){
+    printk(KERN_WARNING <span class="hljs-string">"can't get major %d\n"</span>, bzip_major);
+    <span class="hljs-keyword">return</span> result;
+}
+</div></div></code></pre><h3 id="32-Important-Data-Structures---file_operations、file、inode">3.2 Important Data Structures - file_operations、file、inode</h3><ul>
+<li>defined in <em>&lt;linux/fs.h&gt;</em></li>
+</ul><h4 id="file_operations">file_operations</h4><ul>
+<li>what it does?
+<ul>
+<li>connecting the device number to our <strong>driver’s operations</strong></li>
+<li>what operations ? like open、read、release,etc.</li>
+<li>file -&gt; object<br>
+file_operations -&gt; operation method for object</li>
+</ul>
+</li>
+<li>structure of file_operations initialization</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span></div><div class="code"><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">file_operations</span> <span class="hljs-title">fops</span>={</span>
+    .owner   = THIS_MODULES,    <span class="hljs-comment">//defined in &lt;linux/modules.h&gt;</span>
+    .llseek  = bzip_llseek,
+    .read    = bzip_read,
+    .write   = bzip_write,
+    .ioctl   = bzip_ioctl,
+    .open    = bzip_open,
+    .release = bzip_release,
+};
+</div></div></code></pre><ul>
+<li>important functions and struct of <em>file_oeperations</em>
+<ul>
+<li>
+<p><em><strong>struct module *owner</strong></em><br>
+prevent the module from being unloaded while its operations are in use.</p>
+</li>
+<li>
+<p><em><strong>int (*open) (struct inode *, struct file *);</strong></em><br>
+open file</p>
+</li>
+<li>
+<p><em><strong>int (*release) (struct inode *, struct file *)</strong></em><br>
+invoked when the <em>file structure</em> is being release.</p>
+</li>
+<li>
+<p><em><strong>ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);</strong></em></p>
+<ul>
+<li>used to retrieve data from device.</li>
+<li><em>loff_t</em>  : long offset</li>
+<li><em>ssize_t</em> : return signed size, like EINVAL(invalid argument)</li>
+</ul>
+</li>
+<li>
+<p><em><strong>ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);</strong></em><br>
+sends data to the deivce.</p>
+</li>
+<li>
+<p><em><strong>ssize_t (*aio_read) (struct kiocb *, char __user *, size_t, loff_t *);</strong></em><br>
+initials an asynchronous read - a read operation that might not complete before the function returns</p>
+</li>
+<li>
+<p>*<em><strong>ssize_t (*aio_write) (struct kiocb *, const char __user *, size_t, loff_t *);</strong></em><br>
+initials an asynchronous write operation on the device</p>
+</li>
+<li>
+<p><em><strong>int (*ioctl) (struct inode *, struct file *, unsigned int, unsigned long);</strong></em> <img alt=":smiling_imp:" class="emoji" src="https://cdnjs.cloudflare.com/ajax/libs/emojify.js/1.1.0/images/basic/smiling_imp.png" title=":smiling_imp:"></p>
+<ul>
+<li>I/O control</li>
+<li>apps should provide ioctl operations method<br>
+(defined in <em>&lt;sys/ioctl/h&gt;</em>) in user space</li>
+</ul>
+</li>
+<li>
+<p><em><strong>unsigned int (*poll) (struct file *, struct poll_table_struct *);</strong></em><br>
+The poll method is the back end of three system calls : <em>poll、epoll</em>、and <em>select</em>, all of which are used to query whether a read or write to one or more file descriptors would <strong>block</strong>(detailes about <a href="http://www.cnblogs.com/Anker/p/3265058.html" target="_blank">poll、epoll、select</a>)</p>
+</li>
+<li>
+<p><em><strong>int (*mmap) (struct file *, struct vm_area_struct *);</strong></em> <img alt=":smiling_imp:" class="emoji" src="https://cdnjs.cloudflare.com/ajax/libs/emojify.js/1.1.0/images/basic/smiling_imp.png" title=":smiling_imp:"></p>
+<ul>
+<li>memory maping.</li>
+<li>To let virtual memory on device maps to proccess’s address space(physical memory)</li>
+<li>if NULL, return <em>-ENODEV</em></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul><ul>
+<li>(details about all the functions , please check p.51)</li>
+</ul><h4 id="file">file</h4><ul>
+<li>What the structure represent ?
+<ul>
+<li>the open file</li>
+</ul>
+</li>
+<li>usually use <em><strong>filp</strong></em> pointer to represent the pointer to struct file</li>
+<li>important functions and struct of <em>file</em>
+<ul>
+<li>
+<p><em><strong>mode_t f_mode;</strong></em></p>
+<ul>
+<li>identifies the file as either readable or writable(or both)</li>
+<li><em>FMODE_READ、FMODE_WRITE、FMODE_READ | FMODE_WRITE</em></li>
+<li>the system will automatically check!</li>
+</ul>
+</li>
+<li>
+<p><em><strong>struct file_operations *f_op;</strong></em> <img alt=":smiling_imp:" class="emoji" src="https://cdnjs.cloudflare.com/ajax/libs/emojify.js/1.1.0/images/basic/smiling_imp.png" title=":smiling_imp:"></p>
+<ul>
+<li>the pointer to a file_operations struct</li>
+<li><em>filp-&gt;f_op = &amp;Fops;</em></li>
+</ul>
+</li>
+<li>
+<p><em><strong>void * private_data;</strong></em> <img alt=":smiling_imp:" class="emoji" src="https://cdnjs.cloudflare.com/ajax/libs/emojify.js/1.1.0/images/basic/smiling_imp.png" title=":smiling_imp:"></p>
+<ul>
+<li>useful resource for preserving state information across system calls .</li>
+<li>open method  -&gt; assign!</li>
+<li>release  method -&gt; free</li>
+</ul>
+</li>
+<li>
+<p><em><strong>loff_t f_pos;</strong></em></p>
+<ul>
+<li>long offset = 64bits(current)</li>
+</ul>
+</li>
+<li>
+<p><em><strong>unsigned int f_flags;</strong></em></p>
+<ul>
+<li>Blocking I/O or Non-blocking</li>
+<li><em>O_RDONLY、O_NONBLOCK、O_SYNC</em> in <em>&lt;linux/fcntl.h&gt;</em></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul><h4 id="inode">inode</h4><ul>
+<li>Represents an open file descriptor</li>
+<li>many file structures only point to one inode structure<br>
+(like inode has many block!)</li>
+<li>important functions and struct of inode
+<ul>
+<li>
+<p><em><strong>dev_t i_redev;</strong></em></p>
+<ul>
+<li>for inodes that represent devices files, contains the actual device number</li>
+</ul>
+</li>
+<li>
+<p><em><strong>struct cdev *i_cdev;</strong></em> <img alt=":smiling_imp:" class="emoji" src="https://cdnjs.cloudflare.com/ajax/libs/emojify.js/1.1.0/images/basic/smiling_imp.png" title=":smiling_imp:"></p>
+<ul>
+<li>kernel’s internal structure that represents <em>char devices</em></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul><h3 id="33-How-to-register-char-device-">3.3 How to register char device ?</h3><ul>
+<li>user <em><strong>struct cdev *i_cdev;</strong></em> to register</li>
+<li>include <em>&lt;linux/cdev.h&gt;</em></li>
+</ul><h4 id="Two-ways">Two ways</h4><ol>
+<li>allocate a cdev structure automatically by <em><strong>cdev_alloc()</strong></em></li>
+</ol><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span></div><div class="code"><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">cdev</span> *<span class="hljs-title">my_cdev</span> = <span class="hljs-title">cdev_alloc</span>();</span> 
+my_cdev-&gt;ops = &amp;my_fops; <span class="hljs-comment">//my file operations structrue</span>
+</div></div></code></pre><ol start="2">
+<li>initialize your own structure
+<ul>
+<li>cdev struct owner must be assign <em>THIS_MODULE</em></li>
+<li><em><strong>void cdev_init(struct cdev *dev, struct file_operations *fops);</strong></em></li>
+<li><em><strong>int cdev_add(struct cdev *dev, devt_t num, unsigned int count);</strong></em>
+<ul>
+<li>add cdev struct into kernel</li>
+<li><em>num</em> device number</li>
+<li>count : number of device numbers</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span>
+<span data-linenumber="12"></span>
+<span data-linenumber="13"></span>
+<span data-linenumber="14"></span>
+<span data-linenumber="15"></span>
+<span data-linenumber="16"></span>
+<span data-linenumber="17"></span>
+<span data-linenumber="18"></span></div><div class="code"><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">bzip_dev</span>{</span>
+    <span class="hljs-keyword">int</span> size_of_data;
+    <span class="hljs-keyword">int</span> access_key;
+    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">semaphore</span> <span class="hljs-title">sem</span>;</span>  <span class="hljs-comment">//mutual exclusion semaphore</span>
+    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">cdev</span> <span class="hljs-title">cdev</span>;</span>
+};  <span class="hljs-comment">//to drive bzip has many device!!</span>
+
+<span class="hljs-function"><span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title">bzip_setup_cdev</span><span class="hljs-params">(struct bzip_dev *dev, <span class="hljs-keyword">int</span> index)</span></span>{
+    <span class="hljs-keyword">int</span> err,
+        devno = MKDEV(bzip_major, bzip_minor + index);
+    cdev_init(&amp;dev-&gt;cdev, &amp;bzip_fops);
+    dev-&gt;cdev.owner = THIS_MODULE;
+    err = cdev_add(&amp;dev-&gt;cdev, devno, <span class="hljs-number">1</span>);
+    
+    <span class="hljs-comment">// if failed</span>
+    <span class="hljs-keyword">if</span>(err)
+        printk(KERN_NOTICE <span class="hljs-string">"Error %d adding  %d"</span>, err, index);
+}
+</div></div></code></pre><h3 id="34-The-open-Method">3.4 The open Method</h3><ul>
+<li>*<strong>int (*open) (struct inode <em>inode, struct file *filp);</em></strong></li>
+</ul><h4 id="Method-should-contain-">Method should contain :</h4><ol>
+<li>check the error about hardware</li>
+<li>initialization at first open</li>
+<li>update f_op pointer</li>
+<li><em>filp-&gt;private_data</em></li>
+</ol><h4 id="macro-in-ltlinuxkernelhgt-that-find-the-structure-which-contains-cdev">macro in &lt;linux/kernel.h&gt; that find the structure which contains cdev!</h4><p><em><strong>container_of(pointer, container_type, container_filed);</strong></em></p><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span>
+<span data-linenumber="12"></span></div><div class="code"><span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">bzip_open</span>(<span class="hljs-params"><span class="hljs-keyword">struct</span> inode *inode, <span class="hljs-keyword">struct</span> file *filp</span>)
+</span>{
+    <span class="hljs-keyword">struct</span> bzip_dev *dev;
+    
+    dev = container_of(inode-&gt;i_cdev, <span class="hljs-keyword">struct</span> bzip_dev, cdev);
+    filp-&gt;private_dat = dev;
+    
+    <span class="hljs-keyword">if</span>((filp-&gt;f_flags &amp; O_ACCMODE) == O_WRONLY){
+        bzip_trim(dev);
+    }
+    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>; <span class="hljs-comment">//success</span>
+}
+</div></div></code></pre><p><img src="https://i.imgur.com/DoncM7C.png" alt="" width="600" height="300"></p><h3 id="35-The-Release-Method">3.5 The Release Method</h3><ul>
+<li><em><strong>int (*release)(struct inode *inode, struct file *filp);</strong></em></li>
+</ul><h4 id="Method-shoud-contain-">Method shoud contain :</h4><ol>
+<li>deallocate anything that open allocated in <em>filp-&gt;private_data</em></li>
+<li>shut down the device on last close</li>
+</ol><h4 id="How-to-tell-the-“last-close”-">How to tell the “last close” ?</h4><ul>
+<li>dup() or fork() may add the count of opening file, but don’t call open(). However the proccess call dup() or for(), they end in close() system call.</li>
+<li>Not every close system call causes the release method to be invoke!! (count file structure ~ fork and dup don’t generate new file structure)</li>
+</ul><h3 id="36-The-Read-Method">3.6 The Read Method</h3><ul>
+<li>read data from kernel-space to user-space</li>
+<li><em><strong>ssize_t read(struct file *filp, char __user *buff, size_t count, loff_t *f_pos);</strong></em>
+<ul>
+<li><em>filp</em> -&gt; pointer to file structre</li>
+<li><em>count</em> - the size of the requested data transfer</li>
+<li><em>buff</em> -&gt; points to the user buffer holding the data to be written or the empty buffer where the newly read data shoud by placed.</li>
+<li><em>offp</em> -&gt; indicates the file position the user is accessing</li>
+<li>return
+<ul>
+<li>&gt;0,but &lt;count : only part of data successfully transfer.(device shutdown)</li>
+<li>= 0: reach EOF</li>
+<li>-1 : errno , defined in <em>&lt;linux/errno.h&gt;</em><br>
+like -EINTR(interrupted system call)、-EFAULT(wrong address)</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>blocking or non-blocking? see chapter 6<br>
+<img src="https://i.imgur.com/zjIeLqT.png" alt=""></li>
+</ul><h4 id="Why-don’t-we-directly-access-user-space-memory-">Why don’t we directly access user-space memory ?</h4><ol>
+<li>the address of user-space and kernel-space are nothing to do with</li>
+<li>user space is paged!!!</li>
+<li>applications may be failed or malicious</li>
+</ol><h4 id="How-to-safely-access-">How to safely access ?</h4><ul>
+<li><em>#include&lt;asm/uaccess.h&gt;</em></li>
+<li><em><strong>usigned long copy_to_user(void __user *to, const void *from, unsigned long count);</strong></em>
+<ul>
+<li>to ensure data transfer between kernel and user space</li>
+<li>if don’t finish the transfer, return <em>-EFAULT</em></li>
+</ul>
+</li>
+</ul><h3 id="37-The-write-Method">3.7 The write Method</h3><ul>
+<li>write the data from user space to kernel space</li>
+<li><em><strong>ssize_t write(struct file *filp, const char __user *buff, size_t count, loff_t *f_pos);</strong></em>
+<ul>
+<li>return :
+<ul>
+<li>=count : all the data are written to kernel</li>
+<li>&gt;0 but &lt;count : part of data are transfered</li>
+<li>= 0 : error int &lt;liunx/errno.h&gt;</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul><h4 id="How-to-safely-access-1">How to safely access ?</h4><ul>
+<li><em>#include&lt;asm/uaccess.h&gt;</em></li>
+<li><em><strong>unsigned long copy_from_user(void __user *to, const void __user *from, unsigned long count);</strong></em>
+<ul>
+<li>to ensure data transfer between kernel and user space</li>
+<li>if don’t finish the transfer, return <em>-EFAULT</em></li>
+</ul>
+</li>
+</ul><h3 id="38-init_module-flow">3.8 init_module flow</h3><p><img src="https://i.imgur.com/QF635Ve.png" alt=""></p><h3 id="Reference-code">Reference code</h3><p><a href="https://github.com/vigith/Linux-Device-Drivers/tree/master/LDD3/scull_simple" target="_blank">https://github.com/vigith/Linux-Device-Drivers/tree/master/LDD3/scull_simple</a></p><h2 id="Chapter-4-Debugging-Techniques">Chapter 4. Debugging Techniques</h2><h3 id="41-Debugging-by-Printing">4.1 Debugging by Printing</h3><h4 id="printk">printk()</h4><ul>
+<li>print in /var/log/messages</li>
+<li>printk only print only reach"\n"</li>
+<li>priority of the message (defined in <em>&lt;linux/kernel.h&gt;</em>)
+<ul>
+<li><em>KERN_EMERG</em> : Used for emergency message. usally those that precede a crash</li>
+<li><em>KERN_ALERT</em> : A situation requiring immediate action</li>
+<li><em>KERN_CRIT</em> : Critical conditions, often related to serious hardware or software failures</li>
+<li><em>KERN_ERR</em> : Used to report error conditions; device drivers often use KERN_ERR to report hardware difficults</li>
+<li><em>KERN_WARNING</em> : Warings about problematic situations that do not, in themselves, create serious problems with the system</li>
+<li><em>KERN_NOTICE</em> : Siuations that are normal, but still worthy of note. A number of security-related conditions are reported at this level.</li>
+<li><em>KERN_INFO</em> : Informations messages</li>
+<li><em>KERN_DEBUG</em> : Used for debugging messages</li>
+</ul>
+</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span></div><div class="code"><span class="hljs-comment">//in liunx/kernel.h</span>
+<span class="hljs-meta">#<span class="hljs-meta-keyword">define</span> KERN_EMERG    <span class="hljs-meta-string">"&lt;0&gt;"</span></span>
+<span class="hljs-meta">#<span class="hljs-meta-keyword">define</span> KERN_ALERT    <span class="hljs-meta-string">"&lt;1&gt;"</span></span>
+<span class="hljs-meta">#<span class="hljs-meta-keyword">define</span> KERN_CRIT     <span class="hljs-meta-string">"&lt;2&gt;"</span></span>
+..
+</div></div></code></pre><ul>
+<li>console_loglevel : kernel may print the message to current console based on the loglevel. (the priority of message should be higher than console_loglevel, then it would be printed out.)
+<ul>
+<li>change level : <em>#echo 8 &gt; /proc/sys/kernel/printk</em></li>
+</ul>
+</li>
+<li><em>DEFAULT_MESSAGE_LOGLEVEL</em><br>
+<img src="https://i.imgur.com/LjLeAoi.png" alt=""></li>
+</ul><h4 id="Redirecting-Console-Messages">Redirecting Console Messages</h4><ul>
+<li>by <em><strong>ioctl</strong></em>  defined in both user space (<em>#include&lt;\sys/ioctl.h&gt;</em>) and kernel space (<em>#include&lt;linux/ioctl.h&gt;</em>)</li>
+<li>allows you to sent messages to a specific virtual console.</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span>
+<span data-linenumber="12"></span>
+<span data-linenumber="13"></span>
+<span data-linenumber="14"></span></div><div class="code"><span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">main</span><span class="hljs-params">(<span class="hljs-keyword">int</span> argc, <span class="hljs-keyword">char</span> **argv)</span>
+</span>{
+    <span class="hljs-keyword">char</span> bytes[<span class="hljs-number">2</span>] = {<span class="hljs-number">11</span>, <span class="hljs-number">0</span>};
+    <span class="hljs-keyword">if</span>(argc == <span class="hljs-number">2</span>) byte[<span class="hljs-number">1</span>] = atoi(argv[<span class="hljs-number">1</span>]);
+    <span class="hljs-keyword">else</span>{
+        <span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">"%s: need a single arg\n"</span>, argv[<span class="hljs-number">0</span>]);
+        <span class="hljs-built_in">exit</span>(<span class="hljs-number">1</span>);
+    }
+    <span class="hljs-keyword">if</span>(ioctl(STDIN_FILENO, TIOCLINUX, bytes) &lt; <span class="hljs-number">0</span>){
+        <span class="hljs-built_in">fprintf</span>(<span class="hljs-built_in">stderr</span>, <span class="hljs-string">"%s: ioctl(stdin, TIOCLINUX): %s\n"</span>,argv[<span class="hljs-number">0</span>], strerror(errno));
+        <span class="hljs-built_in">exit</span>(<span class="hljs-number">1</span>);
+    }
+    <span class="hljs-built_in">exit</span>(<span class="hljs-number">0</span>);
+}
+</div></div></code></pre><ul>
+<li>TIOCLINUX is not recommended because it’s not portable</li>
+</ul><h4 id="How-Messages-Get-logged">How Messages Get logged</h4><ul>
+<li>
+<p>see <a href="https://www.quora.com/What-is-the-difference-between-syslogd-and-klogd-daemon-in-Linux" target="_blank">syslogd() and klogd</a></p>
+</li>
+<li>
+<p>a circular buffer(queue) : If the circular buffer fills up , <em>printk</em> wraps around the starts adding new data to the beginning of the buffer, overwritting the oldest dat</p>
+</li>
+<li>
+<p>klogd : Kernel messages are stored in circular buffer. klogd extracts messages from kernel log buffer and sends them to system log. If klogd isn’t running than data remains in circular buffer until someone reads it or the buffer overflows</p>
+</li>
+<li>
+<p>syslogd : syslogd listens to messages on /dev/log socket and routes them to either console, log file or another daemon. Each message is labeled with facility code and assigned a severity label. Facility code is used to specify the type of program that is logging the message. **0 **- Kernel message</p>
+</li>
+<li>
+<p>klogd passes kernel messages to syslog utility.</p>
+</li>
+</ul><p><img src="https://i.imgur.com/IdHOR2u.png" alt=""></p><h4 id="Turning-the-Messages-On-and-Off">Turning the Messages On and Off</h4><ul>
+<li>Why do we turn it off ?
+<ul>
+<li>Request debugger before releasing driver</li>
+<li>Once releasing , we should turn it off.</li>
+</ul>
+</li>
+<li>by #ifndef ~  #ifdef ~ #endif</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span>
+<span data-linenumber="12"></span>
+<span data-linenumber="13"></span>
+<span data-linenumber="14"></span>
+<span data-linenumber="15"></span></div><div class="code"><span class="hljs-meta">#<span class="hljs-meta-keyword">undef</span> PDEBUG       <span class="hljs-comment">/* udef it, just in case */</span></span>
+<span class="hljs-meta">#<span class="hljs-meta-keyword">ifdef</span> BZIP_DEBUG</span>
+    <span class="hljs-meta">#<span class="hljs-meta-keyword">ifdef</span> __KERNEL</span>
+        <span class="hljs-comment">// debugger on  kernel space</span>
+        <span class="hljs-meta">#<span class="hljs-meta-keyword">define</span> PDEBUG(fmt, args...) printk(KERN_DEBUG <span class="hljs-meta-string">"bzip: "</span> fmt, ## args)</span>
+    <span class="hljs-meta">#<span class="hljs-meta-keyword">else</span></span>
+        <span class="hljs-comment">// debugger on user space</span>
+        <span class="hljs-meta">#<span class="hljs-meta-keyword">define</span> PDEBUG(fmt, args..) fprintf(stderr, fmt, ## args)</span>
+    <span class="hljs-meta">#<span class="hljs-meta-keyword">endif</span></span>
+<span class="hljs-meta">#<span class="hljs-meta-keyword">else</span></span>
+    <span class="hljs-meta">#<span class="hljs-meta-keyword">define</span> PDEBUG(fmt, args...) <span class="hljs-comment">// empty macro</span></span>
+<span class="hljs-meta">#<span class="hljs-meta-keyword">endif</span></span>
+
+<span class="hljs-meta">#<span class="hljs-meta-keyword">undef</span> PDEBUGG</span>
+<span class="hljs-meta">#<span class="hljs-meta-keyword">define</span>  PDEBUGG(fmt, args...)</span>
+</div></div></code></pre><h4 id="Printing-Device-Numbers">Printing Device Numbers</h4><ul>
+<li>functions defined in &lt;liunx/kdev_t.h&gt;</li>
+<li><em><strong>int print_dev(char *buffer, dev_t dev);</strong></em></li>
+<li><em><strong>char *format_dev_t(char *buffer, dev_t dev);</strong></em></li>
+</ul><h4 id="The-corns-of-printk">The corns of printk()</h4><ul>
+<li>slow down the system noticeably</li>
+</ul><h3 id="42-Debugging-by-Querying">4.2 Debugging by Querying</h3><h4 id="proc">/proc</h4><p>Each file under /proc is tied to a kernel function that generates the file’s “contents” on the fly when the file is read.</p><h4 id="implement-files-in-proc">implement files in /proc</h4><ul>
+<li>functions defined in <em>include&lt;linux/pro_fs.h&gt;</em></li>
+<li>only can store a page!</li>
+<li><em><strong>int (*read_proc)(char *page, char **start, off_t offset, int count, int *eof, void *data);</strong></em>
+<ul>
+<li><em>page</em> : is the buffer where you’ll write your data(default in kernel)</li>
+<li><em>start</em> : where the interesting data has been written in page</li>
+<li><em>offset  and  count</em> : like read function</li>
+<li><em>data</em> : is a driver-specific data pointer you can use for internal bookkeeping</li>
+</ul>
+</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span>
+<span data-linenumber="8"></span>
+<span data-linenumber="9"></span>
+<span data-linenumber="10"></span>
+<span data-linenumber="11"></span>
+<span data-linenumber="12"></span>
+<span data-linenumber="13"></span>
+<span data-linenumber="14"></span>
+<span data-linenumber="15"></span>
+<span data-linenumber="16"></span>
+<span data-linenumber="17"></span>
+<span data-linenumber="18"></span>
+<span data-linenumber="19"></span>
+<span data-linenumber="20"></span>
+<span data-linenumber="21"></span>
+<span data-linenumber="22"></span>
+<span data-linenumber="23"></span>
+<span data-linenumber="24"></span>
+<span data-linenumber="25"></span></div><div class="code"><span class="hljs-keyword">int</span> scull_read_procem(char *buf, char **start, off_t offset, <span class="hljs-keyword">int</span> count, <span class="hljs-keyword">int</span> *<span class="hljs-keyword">eof</span>, void *data)
+{
+    <span class="hljs-keyword">int</span> i, j, len = <span class="hljs-number">0</span>;
+    <span class="hljs-keyword">int</span> limit = count -<span class="hljs-number">80</span>;
+    
+    <span class="hljs-keyword">for</span>(i = <span class="hljs-number">0</span>; i &lt; scull_nr_devs &amp;&amp; len &lt;= limit; i++)
+    {
+        struct scull_dev *d = &amp;scull_devices[i];
+        struct scull_qset *qs = d-&gt;data;
+        <span class="hljs-keyword">if</span>(down_interruptible(&amp;d-&gt;sem))
+            <span class="hljs-keyword">return</span> -ERESTARTSYS;
+        len += <span class="hljs-keyword">sprintf</span>(buf+len, <span class="hljs-string">"\nDevice %i: qset %i, q %i, sz %li\n"</span>,i, d-&gt;qset, d-&gt;quantum, d-&gt;size);
+        <span class="hljs-keyword">for</span>(; qs &amp;&amp; len &lt;= limit; qs = qs -&gt; <span class="hljs-keyword">next</span>){
+            len += <span class="hljs-keyword">sprintf</span>(buf+len, <span class="hljs-string">" item at %p, qset at %p\n"</span>, qs, qs-&gt;data);
+        <span class="hljs-keyword">if</span>(qs-&gt;data &amp;&amp; !qs-&gt;<span class="hljs-keyword">next</span>)
+            <span class="hljs-keyword">for</span>(j = <span class="hljs-number">0</span>; j &lt; d-&gt;qset; j++){
+                <span class="hljs-keyword">if</span>(qs-&gt;data[j])
+                    len += <span class="hljs-keyword">sprintf</span>(buf+len, <span class="hljs-string">"     %4i:  %8p\n"</span>, j, qs-&gt;data[j]);
+            }
+        }
+        up(&amp;scull_devices[i].sem);
+    }
+    *<span class="hljs-keyword">eof</span> = <span class="hljs-number">1</span>;
+    <span class="hljs-keyword">return</span> len;
+}
+</div></div></code></pre><h4 id="register-proc">register /proc</h4><ul>
+<li><em><strong>struct proc_dir_entry *create_proc_read_entry(const char *name, mode_t mode, struct proc_dir_entry *base, read_proc_t *read proc, void *data);</strong></em>
+<ul>
+<li><em>name</em> : the name of the file to create</li>
+<li><em>mode</em> : the protection mask for the file(0 : for system-wide default)</li>
+<li><em>base</em> : indicates the directory in which the file should be created(if NULL, the file is created in the /proc )</li>
+</ul>
+</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span></div><div class="code">    create_proc_read_entry(<span class="hljs-string">"scullmen"</span>, <span class="hljs-number">0</span>, <span class="hljs-literal">NULL</span>, scull_read_procmen, <span class="hljs-literal">NULL</span>);
+</div></div></code></pre><ul>
+<li>remove the proc entry</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span></div><div class="code">    remove_proc_entry(<span class="hljs-string">"scullmen"</span>, <span class="hljs-literal">NULL</span> <span class="hljs-comment">/* parent dir */</span>);
+</div></div></code></pre><h4 id="manage-proc-with-seq_file-Interface">manage /proc with seq_file Interface</h4><ul>
+<li>Recommended!</li>
+<li>functions and structure defined in <em>&lt;linux/seq_file.h&gt;</em></li>
+<li><em><strong>seq_operations</strong></em> structure</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span></div><div class="code"><span class="hljs-keyword">static</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">seq_operations</span> <span class="hljs-title">scull_seq_ops</span> = {</span>
+    .start = scull_seq_start,
+    .next = scull_seq_next,
+    .stop = scull_sqe_stop,
+    .show = scull_seq_show
+};
+</div></div></code></pre><ul>
+<li><em>start method</em><br>
+<em><strong>void *start(struct seq_file *sfile, loff_t *pos);</strong></em>
+<ul>
+<li>sfile : can almost be ignored</li>
+<li>pos : the index of device driver</li>
+</ul>
+</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span></div><div class="code"><span class="hljs-function"><span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> *<span class="hljs-title">scull_seq_start</span><span class="hljs-params">(struct seq_file *s, <span class="hljs-keyword">loff_t</span> *)</span></span>{
+    <span class="hljs-keyword">if</span>(*pos &gt;= scull_nr_devs)
+        <span class="hljs-keyword">return</span> <span class="hljs-literal">NULL</span>;
+    <span class="hljs-keyword">return</span> scull_devices + *pos;
+}
+</div></div></code></pre><ul>
+<li><em>next method</em><br>
+<em><strong>void *next(struct seq_file *sfile, void *v, loff_t  *pos);</strong></em>
+<ul>
+<li><em>v</em> : the iterator as returned form the previous call to start or next</li>
+<li><em>pos</em> is the current position in the file</li>
+</ul>
+</li>
+</ul><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span></div><div class="code"><span class="hljs-function"><span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> *<span class="hljs-title">scull_seq_next</span><span class="hljs-params">(struct seq_file *s, <span class="hljs-keyword">void</span> *v, <span class="hljs-keyword">loff_t</span> *pos)</span>
+</span>{
+    (*pos)++;
+    <span class="hljs-keyword">if</span>(*pos &gt;= scull_nr_devs);
+        <span class="hljs-keyword">return</span> <span class="hljs-literal">NULL</span>;
+    <span class="hljs-keyword">return</span> scull_devices + *pos;
+}
+</div></div></code></pre><ul>
+<li><em>stop method</em><br>
+<em><strong>void stop(struct seq_file *sfile, void *v);</strong></em>
+<ul>
+<li>when the kernel is done with iterator, it calls stop to clean up</li>
+</ul>
+</li>
+<li><em>show method</em><br>
+<em><strong>int show (struct sequ_file *sfile, void *v);</strong></em>
+<ul>
+<li>this method should create output for the item in the sequence indicated by the iterator <strong>v</strong>.</li>
+<li>function of seq_file output :
+<ul>
+<li><em><strong>int seq_printf(struct seq_file *sfile, const char *fmt, …);</strong></em><br>
+like printf function</li>
+<li><em><strong>int seq_putc(struct seq_file *sfile, char c);</strong></em><br>
+like <em>putc</em> in user space</li>
+<li><em><strong>int seq_puts(struct seq_file *sfile, const char *s);</strong></em><br>
+like <em>puts</em> in user space</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul><h5 id="the-flow">the flow</h5><ol>
+<li>create a seq_operations structure</li>
+<li>create a open method of seq(connect file to seq_operations)</li>
+</ol><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span></div><div class="code"><span class="hljs-function"><span class="hljs-keyword">static</span> <span class="hljs-keyword">int</span> <span class="hljs-title">scull_proc_open</span>(<span class="hljs-params"><span class="hljs-keyword">struct</span> inode *inode, <span class="hljs-keyword">struct</span> file *file</span>)
+</span>{
+    <span class="hljs-keyword">return</span> seq_open(file, &amp;scull_seq_ops);
+}
+</div></div></code></pre><ol start="3">
+<li>create a file_operations for it</li>
+</ol><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span>
+<span data-linenumber="4"></span>
+<span data-linenumber="5"></span>
+<span data-linenumber="6"></span>
+<span data-linenumber="7"></span></div><div class="code"><span class="hljs-keyword">static</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">file_operations</span> <span class="hljs-title">scull_proc_ops</span>={</span>
+    .owner    = THIS_MODULE,
+    .open     = scull_proc_open,
+    .read     = seq_read,     <span class="hljs-comment">//created by kernel</span>
+    .llseek   = seq_lseek,    <span class="hljs-comment">//created by kernel</span>
+    .release  = seq_release   <span class="hljs-comment">//created by kernel</span>
+};
+</div></div></code></pre><ol start="4">
+<li>create the actual file in /proc</li>
+</ol><pre><code class="C hljs"><div class="wrapper"><div class="gutter linenumber"><span data-linenumber="1"></span>
+<span data-linenumber="2"></span>
+<span data-linenumber="3"></span></div><div class="code">entry = creat_proc_entry(<span class="hljs-string">"scullseq"</span>, <span class="hljs-number">0</span>, <span class="hljs-keyword">NULL</span>);
+<span class="hljs-keyword">if</span>(entry)
+    entry-&gt;proc_fops = &amp;scull_proc_ops;
+</div></div></code></pre><h4 id="The-ioctl-Method">The ioctl Method</h4><ul>
+<li>see chapter 6 how to use i/o control~</li>
+<li>faster than /proc but need to write an application in user mode</li>
+</ul><h3 id="43-Debugging-by-Watching">4.3 Debugging by Watching</h3><ul>
+<li><strong>strace</strong>
+<ul>
+<li>Not only does it show the calls, but it can also show the arguments to the calls and return values in symbolic form(e.g. ENOMEM)</li>
+<li>-t : display the time when each call is executed</li>
+<li>-T : display the time spent in the call</li>
+<li>-e : to limit the types of calls traced</li>
+<li>-o : to redirect ouput to a file -&gt; stderr</li>
+</ul>
+</li>
+</ul><h3 id="44-Debugging-System-faults">4.4 Debugging System faults</h3><h4 id="Oops">Oops</h4><ul>
+<li>virtual address -&gt; page table -&gt; physical address</li>
+<li>if try to dereference a virtual address or invalid pointer, the paging mechanism fails to map the pointer to a physical address, and the proccessor signals <em>page fault</em> to the operating system.</li>
+<li>Oops : CPU status at the time of the faults.<br>
+<img src="https://i.imgur.com/v3Hml5g.png" alt=""></li>
+</ul><h4 id="System-Hangs">System Hangs</h4><ul>
+<li>shutdown !</li>
+<li>for exmampls : endless loop</li>
+</ul><h4 id="How-to-avoid">How to avoid?</h4><ul>
+<li>inserting <em>schedule</em> invocations at strategic points -&gt;other proccess can steal CPU time of current proccess. then you can kill the proccess</li>
+<li>schedule -&gt; block -&gt; reentracy( program may not execute failed even if the section of program run simultaneously)</li>
+<li>do not call <em>schedule()</em> when process has <strong>spinlock</strong></li>
+</ul><h3 id="45-Debuggers-and-Related-Tools">4.5 Debuggers and Related Tools</h3><h4 id="gdb">gdb</h4><h4 id="kdb">kdb</h4><h4 id="kgdb">kgdb</h4><h4 id="User-Mode-Linux-Port">User-Mode Linux Port</h4><h4 id="Linux-Trace-ToolkitLTT">Linux Trace Toolkit(LTT)</h4><h4 id="Dynamic-Probes">Dynamic Probes</h4></div>
