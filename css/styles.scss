@@ -20,7 +20,7 @@ body {
 header {
     height: 80px;
     width: 100%;
-    background-color: rgba(34, 36, 43, 0.856);
+    background-color: rgba(31, 32, 34, 0.904);
     margin: 0 auto;
     display: flex;
     justify-content: flex-end;
@@ -41,14 +41,13 @@ header {
             align-content: space-around;
         
             li {
-                border-radius: 5px;
-                font-size: $FONT_SIZE;
                 font-weight: 650;
                 height: 60px;
                 display: flex;
                 align-items: center;
 
                 a{
+                    font-size: $FONT_SIZE;
                     color: rgba(156, 235, 235, 0.74);
                     padding: 18px 16px 18px;
                     text-decoration: none;
