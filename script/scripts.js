@@ -1,18 +1,17 @@
 $(document).ready(function() {
-
-    $('#menu_wrapper ul li').hover(
+    $('nav ul li').hover(
         function () {
             $(this).stop().animate({
-                backgroundColor: 'rgba(37, 152, 206, 0.74)'
+                backgroundColor: 'rgba(37, 152, 206, 0.3)'
             },
-            500,
+            100,
             'easeInSine'
             );
         }, function () {
             $(this).stop().animate({
-                backgroundColor: 'white'
+                backgroundColor: 'rgba(37, 152, 206, 0)'
             },
-            500,
+            100,
             'easeOutBounce'
             );
         }

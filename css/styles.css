@@ -15,8 +15,9 @@ body {
 }
 
 header {
-  height: 100px;
+  height: 80px;
   width: 100%;
+  background-color: rgba(34, 36, 43, 0.856);
   margin: 0 auto;
   display: flex;
   justify-content: flex-end;
@@ -36,7 +37,8 @@ header nav ul {
   align-content: space-around;
 }
 header nav ul li {
-  font-size: 20;
+  border-radius: 5px;
+  font-size: 24;
   font-weight: 650;
   height: 60px;
   display: flex;
@@ -48,7 +50,7 @@ header nav ul li {
   */
 }
 header nav ul li a {
-  color: rgba(28, 29, 29, 0.582);
+  color: rgba(156, 235, 235, 0.74);
   padding: 18px 16px 18px;
   text-decoration: none;
 }
